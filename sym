@@ -1,0 +1,600 @@
+-- SERVICES
+local Players = game:GetService("Players")
+local UIS = game:GetService("UserInputService")
+local RS = game:GetService("RunService")
+local plr = Players.LocalPlayer
+local cam = workspace.CurrentCamera
+
+--------------------------------------------------
+-- SETTINGS MANAGER
+--------------------------------------------------
+local Settings = {
+    Aimbot = {
+        Enabled = true,
+        FOV = 120,
+        Smoothness = 1, -- 1 = instant, higher = smoother
+        TargetPart = "Head",
+        VisibilityCheck = true
+    },
+    ESP = {
+        Enabled = true,
+        Boxes = true,
+        Tracers = true,
+        Names = true,
+        Distance = true,
+        HealthBar = true,
+        MaxDistance = 1000,
+        Color = Color3.fromRGB(180, 0, 255),
+        TeamCheck = true
+    },
+    Fly = {
+        Enabled = false,
+        Speed = 60,
+        Mode = "Free" -- Free, Tween, Noclip
+    },
+    Movement = {
+        WalkSpeed = 16,
+        JumpPower = 50,
+        InfiniteJump = false
+    },
+    Visuals = {
+        FOVCircle = true,
+        Crosshair = false,
+        ThirdPerson = false
+    }
+}
+
+--------------------------------------------------
+-- UTILITY FUNCTIONS
+--------------------------------------------------
+local function getChar()
+    return plr.Character or plr.CharacterAdded:Wait()
+end
+
+local function getHum()
+    return getChar():WaitForChild("Humanoid")
+end
+
+local function getHRP()
+    return getChar():WaitForChild("HumanoidRootPart")
+end
+
+local function isEnemy(p)
+    if p == plr then return false end
+    if not Settings.ESP.TeamCheck then return true end
+    
+    if plr.Team and p.Team then
+        return p.Team ~= plr.Team
+    end
+    return true
+end
+
+local function isVisible(target)
+    if not Settings.Aimbot.VisibilityCheck then return true end
+    
+    local origin = cam.CFrame.Position
+    local direction = (target.Position - origin).Unit * (target.Position - origin).Magnitude
+    
+    local ray = RaycastParams.new()
+    ray.FilterType = Enum.RaycastFilterType.Blacklist
+    ray.FilterDescendantsInstances = {plr.Character}
+    
+    local result = workspace:Raycast(origin, direction, ray)
+    return result == nil or result.Instance:IsDescendantOf(target.Parent)
+end
+
+--------------------------------------------------
+-- GUI MANAGER
+--------------------------------------------------
+local GUI = {}
+GUI.Objects = {}
+GUI.Minimized = false
+
+local function createGUI()
+    local gui = Instance.new("ScreenGui", game.CoreGui)
+    gui.Name = "UnknownHub"
+    gui.ResetOnSpawn = false
+    
+    -- Title
+    local title = Instance.new("TextLabel", gui)
+    title.Size = UDim2.fromOffset(320, 28)
+    title.Position = UDim2.new(0.5, -160, 0.25, -50)
+    title.BackgroundTransparency = 1
+    title.Text = "Unknown Hub"
+    title.Font = Enum.Font.GothamBold
+    title.TextSize = 22
+    title.TextColor3 = Color3.fromRGB(180, 0, 255)
+    GUI.Objects.Title = title
+    
+    -- Main Frame
+    local main = Instance.new("Frame", gui)
+    main.Size = UDim2.fromOffset(320, 520)
+    main.Position = UDim2.new(0.5, -160, 0.25, -200)
+    main.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
+    main.Active = true
+    main.Draggable = true
+    Instance.new("UICorner", main).CornerRadius = UDim.new(0, 10)
+    GUI.Objects.Main = main
+    
+    -- Controls
+    local function addButton(text, y, callback)
+        local btn = Instance.new("TextButton", main)
+        btn.Size = UDim2.new(1, -20, 0, 30)
+        btn.Position = UDim2.new(0, 10, 0, y)
+        btn.Text = text
+        btn.Font = Enum.Font.Gotham
+        btn.TextSize = 14
+        btn.TextColor3 = Color3.new(1, 1, 1)
+        btn.BackgroundColor3 = Color3.fromRGB(150, 0, 220)
+        Instance.new("UICorner", btn)
+        btn.MouseButton1Click:Connect(function() callback(btn) end)
+        return btn
+    end
+    
+    local function addLabel(text, y)
+        local lbl = Instance.new("TextLabel", main)
+        lbl.Size = UDim2.new(1, -20, 0, 18)
+        lbl.Position = UDim2.new(0, 10, 0, y)
+        lbl.BackgroundTransparency = 1
+        lbl.Text = text
+        lbl.Font = Enum.Font.Gotham
+        lbl.TextSize = 13
+        lbl.TextColor3 = Color3.fromRGB(200, 200, 200)
+        lbl.TextXAlignment = Enum.TextXAlignment.Left
+        return lbl
+    end
+    
+    local function addSlider(y, min, max, value, callback)
+        local bar = Instance.new("Frame", main)
+        bar.Size = UDim2.new(1, -20, 0, 8)
+        bar.Position = UDim2.new(0, 10, 0, y)
+        bar.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+        Instance.new("UICorner", bar)
+        
+        local fill = Instance.new("Frame", bar)
+        fill.BackgroundColor3 = Color3.fromRGB(180, 0, 255)
+        fill.Size = UDim2.new((value - min) / (max - min), 0, 1, 0)
+        Instance.new("UICorner", fill)
+        
+        local dragging = false
+        bar.InputBegan:Connect(function(i)
+            if i.UserInputType == Enum.UserInputType.MouseButton1 then
+                dragging = true
+            end
+        end)
+        bar.InputEnded:Connect(function(i)
+            if i.UserInputType == Enum.UserInputType.MouseButton1 then
+                dragging = false
+            end
+        end)
+        
+        local connection
+        connection = UIS.InputChanged:Connect(function(i)
+            if dragging and i.UserInputType == Enum.UserInputType.MouseMovement then
+                local pct = math.clamp(
+                    (UIS:GetMouseLocation().X - bar.AbsolutePosition.X) / bar.AbsoluteSize.X,
+                    0, 1
+                )
+                fill.Size = UDim2.new(pct, 0, 1, 0)
+                callback(math.floor(min + pct * (max - min)))
+            end
+        end)
+        
+        return fill
+    end
+    
+    -- Create buttons
+    local y = 44
+    local buttons = {}
+    
+    buttons.Aimbot = addButton("Aimbot: ON", y, function(b)
+        Settings.Aimbot.Enabled = not Settings.Aimbot.Enabled
+        b.Text = "Aimbot: " .. (Settings.Aimbot.Enabled and "ON" or "OFF")
+    end)
+    y += 36
+    
+    buttons.ESP = addButton("ESP: ON", y, function(b)
+        Settings.ESP.Enabled = not Settings.ESP.Enabled
+        b.Text = "ESP: " .. (Settings.ESP.Enabled and "ON" or "OFF")
+    end)
+    y += 36
+    
+    buttons.Tracers = addButton("Tracers: ON", y, function(b)
+        Settings.ESP.Tracers = not Settings.ESP.Tracers
+        b.Text = "Tracers: " .. (Settings.ESP.Tracers and "ON" or "OFF")
+    end)
+    y += 36
+    
+    buttons.Boxes = addButton("ESP Boxes: ON", y, function(b)
+        Settings.ESP.Boxes = not Settings.ESP.Boxes
+        b.Text = "ESP Boxes: " .. (Settings.ESP.Boxes and "ON" or "OFF")
+    end)
+    y += 36
+    
+    buttons.TeamCheck = addButton("Team Check: ON", y, function(b)
+        Settings.ESP.TeamCheck = not Settings.ESP.TeamCheck
+        b.Text = "Team Check: " .. (Settings.ESP.TeamCheck and "ON" or "OFF")
+    end)
+    y += 36
+    
+    buttons.Fly = addButton("Fly: OFF (X)", y, function(b)
+        Settings.Fly.Enabled = not Settings.Fly.Enabled
+        b.Text = "Fly: " .. (Settings.Fly.Enabled and "ON" or "OFF") .. " (X)"
+    end)
+    y += 36
+    
+    buttons.FOV = addButton("FOV Circle: ON", y, function(b)
+        Settings.Visuals.FOVCircle = not Settings.Visuals.FOVCircle
+        b.Text = "FOV Circle: " .. (Settings.Visuals.FOVCircle and "ON" or "OFF")
+    end)
+    y += 36
+    
+    buttons.InfJump = addButton("Infinite Jump: OFF", y, function(b)
+        Settings.Movement.InfiniteJump = not Settings.Movement.InfiniteJump
+        b.Text = "Infinite Jump: " .. (Settings.Movement.InfiniteJump and "ON" or "OFF")
+    end)
+    y += 36
+    
+    -- Sliders
+    y += 10
+    addLabel("FOV Size", y)
+    y += 20
+    addSlider(y, 50, 400, Settings.Aimbot.FOV, function(v)
+        Settings.Aimbot.FOV = v
+    end)
+    y += 30
+    
+    addLabel("Walk Speed", y)
+    y += 20
+    addSlider(y, 16, 200, Settings.Movement.WalkSpeed, function(v)
+        Settings.Movement.WalkSpeed = v
+    end)
+    y += 30
+    
+    addLabel("Fly Speed", y)
+    y += 20
+    addSlider(y, 20, 200, Settings.Fly.Speed, function(v)
+        Settings.Fly.Speed = v
+    end)
+    y += 30
+    
+    addLabel("Aimbot Smoothness", y)
+    y += 20
+    addSlider(y, 1, 20, Settings.Aimbot.Smoothness, function(v)
+        Settings.Aimbot.Smoothness = v
+    end)
+    
+    GUI.Objects.Buttons = buttons
+    return gui
+end
+
+--------------------------------------------------
+-- ESP MANAGER
+--------------------------------------------------
+local ESP = {}
+ESP.Objects = {}
+
+function ESP.Create(player)
+    if player == plr then return end
+    
+    local drawings = {
+        Box = Drawing.new("Square"),
+        Name = Drawing.new("Text"),
+        Distance = Drawing.new("Text"),
+        HealthBar = Drawing.new("Line"),
+        HealthBg = Drawing.new("Line"),
+        Tracer = Drawing.new("Line")
+    }
+    
+    -- Box
+    drawings.Box.Color = Settings.ESP.Color
+    drawings.Box.Thickness = 1.5
+    drawings.Box.Filled = false
+    drawings.Box.Visible = false
+    
+    -- Name
+    drawings.Name.Size = 13
+    drawings.Name.Center = true
+    drawings.Name.Outline = true
+    drawings.Name.Color = Color3.new(1, 1, 1)
+    drawings.Name.Visible = false
+    
+    -- Distance
+    drawings.Distance.Size = 12
+    drawings.Distance.Center = true
+    drawings.Distance.Outline = true
+    drawings.Distance.Color = Color3.new(1, 1, 1)
+    drawings.Distance.Visible = false
+    
+    -- Tracer
+    drawings.Tracer.Color = Settings.ESP.Color
+    drawings.Tracer.Thickness = 1
+    drawings.Tracer.Transparency = 0.7
+    drawings.Tracer.Visible = false
+    
+    -- Health Bar
+    drawings.HealthBar.Color = Color3.new(0, 1, 0)
+    drawings.HealthBar.Thickness = 2
+    drawings.HealthBar.Visible = false
+    
+    drawings.HealthBg.Color = Color3.new(0.3, 0, 0)
+    drawings.HealthBg.Thickness = 2
+    drawings.HealthBg.Visible = false
+    
+    ESP.Objects[player] = drawings
+end
+
+function ESP.Remove(player)
+    if ESP.Objects[player] then
+        for _, v in pairs(ESP.Objects[player]) do
+            v:Remove()
+        end
+        ESP.Objects[player] = nil
+    end
+end
+
+function ESP.Update()
+    if not Settings.ESP.Enabled then
+        -- Hide all
+        for _, drawings in pairs(ESP.Objects) do
+            for _, d in pairs(drawings) do
+                d.Visible = false
+            end
+        end
+        return
+    end
+    
+    local fromPos = Vector2.new(cam.ViewportSize.X / 2, cam.ViewportSize.Y)
+    
+    for player, drawings in pairs(ESP.Objects) do
+        local char = player.Character
+        if not char then
+            for _, d in pairs(drawings) do d.Visible = false end
+            continue
+        end
+        
+        local hum = char:FindFirstChild("Humanoid")
+        local hrp = char:FindFirstChild("HumanoidRootPart")
+        local head = char:FindFirstChild("Head")
+        
+        if not (hum and hum.Health > 0 and hrp and head and isEnemy(player)) then
+            for _, d in pairs(drawings) do d.Visible = false end
+            continue
+        end
+        
+        local hrpPos, onScreen = cam:WorldToViewportPoint(hrp.Position)
+        local headPos = cam:WorldToViewportPoint(head.Position)
+        
+        if not onScreen then
+            for _, d in pairs(drawings) do d.Visible = false end
+            continue
+        end
+        
+        local distance = (hrp.Position - cam.CFrame.Position).Magnitude
+        if distance > Settings.ESP.MaxDistance then
+            for _, d in pairs(drawings) do d.Visible = false end
+            continue
+        end
+        
+        -- Box
+        if Settings.ESP.Boxes then
+            local boxSize = Vector2.new(2000 / distance, 3000 / distance)
+            drawings.Box.Position = Vector2.new(hrpPos.X - boxSize.X / 2, hrpPos.Y - boxSize.Y / 2)
+            drawings.Box.Size = boxSize
+            drawings.Box.Visible = true
+        else
+            drawings.Box.Visible = false
+        end
+        
+        -- Name
+        if Settings.ESP.Names then
+            drawings.Name.Text = player.Name
+            drawings.Name.Position = Vector2.new(hrpPos.X, hrpPos.Y - 30 / distance * 100)
+            drawings.Name.Visible = true
+        else
+            drawings.Name.Visible = false
+        end
+        
+        -- Distance
+        if Settings.ESP.Distance then
+            drawings.Distance.Text = string.format("%.0f studs", distance)
+            drawings.Distance.Position = Vector2.new(hrpPos.X, hrpPos.Y + 30 / distance * 100)
+            drawings.Distance.Visible = true
+        else
+            drawings.Distance.Visible = false
+        end
+        
+        -- Tracer
+        if Settings.ESP.Tracers then
+            drawings.Tracer.From = fromPos
+            drawings.Tracer.To = Vector2.new(hrpPos.X, hrpPos.Y)
+            drawings.Tracer.Visible = true
+        else
+            drawings.Tracer.Visible = false
+        end
+        
+        -- Health Bar
+        if Settings.ESP.HealthBar then
+            local health = hum.Health / hum.MaxHealth
+            local barX = hrpPos.X - 25 / distance * 100
+            local barY = hrpPos.Y - 35 / distance * 100
+            local barHeight = 50 / distance * 100
+            
+            drawings.HealthBg.From = Vector2.new(barX, barY)
+            drawings.HealthBg.To = Vector2.new(barX, barY + barHeight)
+            drawings.HealthBg.Visible = true
+            
+            drawings.HealthBar.From = Vector2.new(barX, barY + barHeight * (1 - health))
+            drawings.HealthBar.To = Vector2.new(barX, barY + barHeight)
+            drawings.HealthBar.Color = Color3.fromRGB(1 - health, health, 0)
+            drawings.HealthBar.Visible = true
+        else
+            drawings.HealthBar.Visible = false
+            drawings.HealthBg.Visible = false
+        end
+    end
+end
+
+--------------------------------------------------
+-- AIMBOT
+--------------------------------------------------
+local function getTarget()
+    if not Settings.Aimbot.Enabled then return nil end
+    
+    local best, bestDist = nil, Settings.Aimbot.FOV
+    
+    for _, player in pairs(Players:GetPlayers()) do
+        if not isEnemy(player) then continue end
+        
+        local char = player.Character
+        if not char then continue end
+        
+        local target = char:FindFirstChild(Settings.Aimbot.TargetPart)
+        if not target then continue end
+        
+        local hum = char:FindFirstChild("Humanoid")
+        if not hum or hum.Health <= 0 then continue end
+        
+        if Settings.Aimbot.VisibilityCheck and not isVisible(target) then continue end
+        
+        local pos, onScreen = cam:WorldToViewportPoint(target.Position)
+        if not onScreen then continue end
+        
+        local distance = (Vector2.new(pos.X, pos.Y) - 
+            Vector2.new(cam.ViewportSize.X / 2, cam.ViewportSize.Y / 2)).Magnitude
+        
+        if distance < bestDist then
+            bestDist = distance
+            best = target
+        end
+    end
+    
+    return best
+end
+
+--------------------------------------------------
+-- FLY SYSTEM
+--------------------------------------------------
+local flyBody, flyGyro
+
+local function updateFly()
+    if Settings.Fly.Enabled then
+        local hrp = getHRP()
+        
+        if not flyBody then
+            flyBody = Instance.new("BodyVelocity", hrp)
+            flyBody.MaxForce = Vector3.new(1e9, 1e9, 1e9)
+            flyBody.Velocity = Vector3.zero
+            
+            flyGyro = Instance.new("BodyGyro", hrp)
+            flyGyro.MaxTorque = Vector3.new(1e9, 1e9, 1e9)
+            flyGyro.D = 100
+            flyGyro.P = 10000
+        end
+        
+        local velocity = Vector3.zero
+        
+        if UIS:IsKeyDown(Enum.KeyCode.W) then velocity += cam.CFrame.LookVector end
+        if UIS:IsKeyDown(Enum.KeyCode.S) then velocity -= cam.CFrame.LookVector end
+        if UIS:IsKeyDown(Enum.KeyCode.A) then velocity -= cam.CFrame.RightVector end
+        if UIS:IsKeyDown(Enum.KeyCode.D) then velocity += cam.CFrame.RightVector end
+        if UIS:IsKeyDown(Enum.KeyCode.Space) then velocity += Vector3.new(0, 1, 0) end
+        if UIS:IsKeyDown(Enum.KeyCode.LeftControl) then velocity -= Vector3.new(0, 1, 0) end
+        
+        if velocity.Magnitude > 0 then
+            velocity = velocity.Unit * Settings.Fly.Speed
+        end
+        
+        flyBody.Velocity = velocity
+        flyGyro.CFrame = cam.CFrame
+    else
+        if flyBody then flyBody:Destroy() flyBody = nil end
+        if flyGyro then flyGyro:Destroy() flyGyro = nil end
+    end
+end
+
+--------------------------------------------------
+-- MOVEMENT
+--------------------------------------------------
+local function updateMovement()
+    local hum = getHum()
+    hum.WalkSpeed = Settings.Movement.WalkSpeed
+    
+    if Settings.Movement.InfiniteJump then
+        hum.JumpPower = Settings.Movement.JumpPower
+        hum.Jump = true
+    end
+end
+
+--------------------------------------------------
+-- FOV CIRCLE
+--------------------------------------------------
+local circle = Drawing.new("Circle")
+circle.Color = Color3.fromRGB(180, 0, 255)
+circle.Thickness = 1.5
+circle.Filled = false
+circle.Transparency = 0.7
+
+local function updateFOV()
+    circle.Visible = Settings.Visuals.FOVCircle
+    circle.Radius = Settings.Aimbot.FOV
+    circle.Position = Vector2.new(cam.ViewportSize.X / 2, cam.ViewportSize.Y / 2)
+end
+
+--------------------------------------------------
+-- MAIN LOOP
+--------------------------------------------------
+RS.RenderStepped:Connect(function(deltaTime)
+    updateMovement()
+    updateFly()
+    ESP.Update()
+    updateFOV()
+    
+    -- Aimbot
+    if Settings.Aimbot.Enabled then
+        local target = getTarget()
+        if target then
+            local targetCFrame = CFrame.new(cam.CFrame.Position, target.Position)
+            if Settings.Aimbot.Smoothness > 1 then
+                cam.CFrame = cam.CFrame:Lerp(targetCFrame, 1 / Settings.Aimbot.Smoothness)
+            else
+                cam.CFrame = targetCFrame
+            end
+        end
+    end
+end)
+
+--------------------------------------------------
+-- INPUT HANDLING
+--------------------------------------------------
+UIS.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    
+    if input.KeyCode == Enum.KeyCode.X then
+        Settings.Fly.Enabled = not Settings.Fly.Enabled
+        if GUI.Objects.Buttons and GUI.Objects.Buttons.Fly then
+            GUI.Objects.Buttons.Fly.Text = "Fly: " .. (Settings.Fly.Enabled and "ON" or "OFF") .. " (X)"
+        end
+    elseif input.KeyCode == Enum.KeyCode.Z then
+        Settings.Aimbot.Enabled = not Settings.Aimbot.Enabled
+        if GUI.Objects.Buttons and GUI.Objects.Buttons.Aimbot then
+            GUI.Objects.Buttons.Aimbot.Text = "Aimbot: " .. (Settings.Aimbot.Enabled and "ON" or "OFF")
+        end
+    end
+end)
+
+--------------------------------------------------
+-- PLAYER TRACKING
+--------------------------------------------------
+Players.PlayerAdded:Connect(ESP.Create)
+Players.PlayerRemoving:Connect(ESP.Remove)
+
+-- Initialize ESP for existing players
+for _, player in pairs(Players:GetPlayers()) do
+    ESP.Create(player)
+end
+
+--------------------------------------------------
+-- INITIALIZATION
+--------------------------------------------------
+createGUI()
