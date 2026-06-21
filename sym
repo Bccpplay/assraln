@@ -65,7 +65,6 @@ local function isEnemy(p)
     return true
 end
 
--- WORKING VISIBILITY CHECK
 local function isVisible(target)
     if not Settings.Aimbot.VisibilityCheck then return true end
     
@@ -91,161 +90,192 @@ local function isVisible(target)
 end
 
 --------------------------------------------------
--- GUI MANAGER (FIXED CLOSE FUNCTIONALITY)
+-- GUI - COMPLETE REWRITE WITH FIXED VISIBILITY
 --------------------------------------------------
-local GUI = {}
 local guiButtons = {}
 
 local function createGUI()
-    local screenGui = Instance.new("ScreenGui", game.CoreGui)
+    -- Remove any existing GUI
+    if game.CoreGui:FindFirstChild("UnknownHub") then
+        game.CoreGui:FindFirstChild("UnknownHub"):Destroy()
+    end
+    
+    local screenGui = Instance.new("ScreenGui")
     screenGui.Name = "UnknownHub"
+    screenGui.Parent = game.CoreGui
     screenGui.ResetOnSpawn = false
-    screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     
-    -- Title
-    local titleLabel = Instance.new("TextLabel", screenGui)
-    titleLabel.Size = UDim2.fromOffset(320, 28)
-    titleLabel.Position = UDim2.new(0.5, -160, 0.25, -50)
-    titleLabel.BackgroundTransparency = 1
-    titleLabel.Text = "Unknown Hub"
-    titleLabel.Font = Enum.Font.GothamBold
-    titleLabel.TextSize = 22
-    titleLabel.TextColor3 = Color3.fromRGB(180, 0, 255)
-    titleLabel.ZIndex = 10
+    -- TITLE
+    local title = Instance.new("TextLabel")
+    title.Name = "Title"
+    title.Parent = screenGui
+    title.Size = UDim2.fromOffset(320, 28)
+    title.Position = UDim2.new(0.5, -160, 0.25, -50)
+    title.BackgroundTransparency = 1
+    title.Text = "Unknown Hub"
+    title.Font = Enum.Font.GothamBold
+    title.TextSize = 22
+    title.TextColor3 = Color3.fromRGB(180, 0, 255)
+    title.ZIndex = 10
     
-    -- Main Container
-    local mainContainer = Instance.new("Frame", screenGui)
-    mainContainer.Size = UDim2.fromOffset(320, 460)
-    mainContainer.Position = UDim2.new(0.5, -160, 0.25, -200)
-    mainContainer.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
-    mainContainer.Active = true
-    mainContainer.Draggable = true
-    mainContainer.ClipsDescendants = true
-    mainContainer.ZIndex = 10
-    Instance.new("UICorner", mainContainer).CornerRadius = UDim.new(0, 10)
+    -- MAIN FRAME
+    local main = Instance.new("Frame")
+    main.Name = "Main"
+    main.Parent = screenGui
+    main.Size = UDim2.fromOffset(320, 460)
+    main.Position = UDim2.new(0.5, -160, 0.25, -200)
+    main.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
+    main.Active = true
+    main.Draggable = true
+    main.ClipsDescendants = true
+    main.ZIndex = 10
+    Instance.new("UICorner", main).CornerRadius = UDim.new(0, 10)
     
-    -- Scrolling Frame
-    local scrollFrame = Instance.new("ScrollingFrame", mainContainer)
-    scrollFrame.Size = UDim2.new(1, 0, 1, -30) -- Leave room for top bar
-    scrollFrame.Position = UDim2.new(0, 0, 0, 30)
-    scrollFrame.BackgroundTransparency = 1
-    scrollFrame.ScrollBarThickness = 6
-    scrollFrame.ScrollBarImageColor3 = Color3.fromRGB(180, 0, 255)
-    scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 520)
-    scrollFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
-    scrollFrame.ScrollingDirection = Enum.ScrollingDirection.Y
-    scrollFrame.ZIndex = 5
-    
-    -- TOP BAR for minimize button
-    local topBar = Instance.new("Frame", mainContainer)
-    topBar.Size = UDim2.new(1, 0, 0, 30)
+    -- TOP BAR
+    local topBar = Instance.new("Frame")
+    topBar.Name = "TopBar"
+    topBar.Parent = main
+    topBar.Size = UDim2.new(1, 0, 0, 36)
     topBar.Position = UDim2.new(0, 0, 0, 0)
-    topBar.BackgroundTransparency = 1
+    topBar.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
     topBar.ZIndex = 15
+    Instance.new("UICorner", topBar).CornerRadius = UDim.new(0, 10)
     
-    -- MINIMIZE BUTTON - using TextButton with proper click handling
-    local minBtn = Instance.new("TextButton", topBar)
-    minBtn.Size = UDim2.fromOffset(36, 24)
-    minBtn.Position = UDim2.new(1, -44, 0, 3)
+    -- TOP BAR TITLE
+    local topTitle = Instance.new("TextLabel")
+    topTitle.Parent = topBar
+    topTitle.Size = UDim2.new(1, -80, 1, 0)
+    topTitle.Position = UDim2.new(0, 12, 0, 0)
+    topTitle.BackgroundTransparency = 1
+    topTitle.Text = "Unknown Hub"
+    topTitle.Font = Enum.Font.GothamBold
+    topTitle.TextSize = 14
+    topTitle.TextColor3 = Color3.fromRGB(180, 0, 255)
+    topTitle.TextXAlignment = Enum.TextXAlignment.Left
+    topTitle.ZIndex = 16
+    
+    -- MINIMIZE BUTTON
+    local minBtn = Instance.new("TextButton")
+    minBtn.Name = "MinBtn"
+    minBtn.Parent = topBar
+    minBtn.Size = UDim2.fromOffset(30, 24)
+    minBtn.Position = UDim2.new(1, -70, 0, 6)
     minBtn.Text = "—"
     minBtn.Font = Enum.Font.GothamBold
-    minBtn.TextSize = 22
+    minBtn.TextSize = 18
     minBtn.TextColor3 = Color3.new(1, 1, 1)
     minBtn.BackgroundColor3 = Color3.fromRGB(150, 0, 220)
     minBtn.ZIndex = 20
-    minBtn.AutoButtonColor = true
     Instance.new("UICorner", minBtn)
     
-    -- MINIMIZED TAB (separate, draggable button to restore)
-    local minimizedTab = Instance.new("TextButton", screenGui)
-    minimizedTab.Size = UDim2.fromOffset(160, 36)
-    minimizedTab.Position = UDim2.new(0.5, -80, 0.25, 0)
-    minimizedTab.Text = "🔽 Open Menu"
-    minimizedTab.Font = Enum.Font.GothamBold
-    minimizedTab.TextSize = 14
-    minimizedTab.TextColor3 = Color3.new(1, 1, 1)
-    minimizedTab.BackgroundColor3 = Color3.fromRGB(150, 0, 220)
-    minimizedTab.Visible = false
-    minimizedTab.Active = true
-    minimizedTab.Draggable = true
-    minimizedTab.ZIndex = 100
-    minimizedTab.AutoButtonColor = true
-    Instance.new("UICorner", minimizedTab)
-    Instance.new("UIStroke", minimizedTab).Color = Color3.fromRGB(180, 0, 255)
-    
-    -- CLOSE BUTTON - separate X button for full close
-    local closeBtn = Instance.new("TextButton", topBar)
-    closeBtn.Size = UDim2.fromOffset(36, 24)
-    closeBtn.Position = UDim2.new(1, -84, 0, 3)
+    -- CLOSE BUTTON
+    local closeBtn = Instance.new("TextButton")
+    closeBtn.Name = "CloseBtn"
+    closeBtn.Parent = topBar
+    closeBtn.Size = UDim2.fromOffset(30, 24)
+    closeBtn.Position = UDim2.new(1, -36, 0, 6)
     closeBtn.Text = "✕"
     closeBtn.Font = Enum.Font.GothamBold
-    closeBtn.TextSize = 16
+    closeBtn.TextSize = 14
     closeBtn.TextColor3 = Color3.new(1, 1, 1)
-    closeBtn.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
+    closeBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
     closeBtn.ZIndex = 20
-    closeBtn.AutoButtonColor = true
     Instance.new("UICorner", closeBtn)
     
+    -- SCROLLING FRAME
+    local scroll = Instance.new("ScrollingFrame")
+    scroll.Name = "Scroll"
+    scroll.Parent = main
+    scroll.Size = UDim2.new(1, 0, 1, -36)
+    scroll.Position = UDim2.new(0, 0, 0, 36)
+    scroll.BackgroundTransparency = 1
+    scroll.ScrollBarThickness = 6
+    scroll.ScrollBarImageColor3 = Color3.fromRGB(180, 0, 255)
+    scroll.CanvasSize = UDim2.new(0, 0, 0, 550)
+    scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    scroll.ScrollingDirection = Enum.ScrollingDirection.Y
+    scroll.ZIndex = 5
+    scroll.ScrollBarImageTransparency = 0.3
+    
+    -- UI LIST LAYOUT for automatic positioning
+    local uiList = Instance.new("UIListLayout")
+    uiList.Parent = scroll
+    uiList.Padding = UDim.new(0, 6)
+    uiList.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    uiList.SortOrder = Enum.SortOrder.LayoutOrder
+    
+    -- PADDING AT TOP
+    local topPadding = Instance.new("Frame")
+    topPadding.Name = "TopPadding"
+    topPadding.Parent = scroll
+    topPadding.Size = UDim2.new(1, 0, 0, 6)
+    topPadding.BackgroundTransparency = 1
+    topPadding.LayoutOrder = 0
+    
+    -- RESTORE BUTTON (minimized state)
+    local restoreBtn = Instance.new("TextButton")
+    restoreBtn.Name = "RestoreBtn"
+    restoreBtn.Parent = screenGui
+    restoreBtn.Size = UDim2.fromOffset(160, 36)
+    restoreBtn.Position = UDim2.new(0.5, -80, 0.25, 0)
+    restoreBtn.Text = "🔽 Open Menu"
+    restoreBtn.Font = Enum.Font.GothamBold
+    restoreBtn.TextSize = 14
+    restoreBtn.TextColor3 = Color3.new(1, 1, 1)
+    restoreBtn.BackgroundColor3 = Color3.fromRGB(150, 0, 220)
+    restoreBtn.Visible = false
+    restoreBtn.Active = true
+    restoreBtn.Draggable = true
+    restoreBtn.ZIndex = 100
+    Instance.new("UICorner", restoreBtn)
+    
     -- CLICK HANDLERS
-    local function minimizeMenu()
-        mainContainer.Visible = false
-        titleLabel.Visible = false
-        minimizedTab.Visible = true
-    end
-    
-    local function restoreMenu()
-        mainContainer.Visible = true
-        titleLabel.Visible = true
-        minimizedTab.Visible = false
-    end
-    
-    local menuVisible = true
-    
     minBtn.MouseButton1Click:Connect(function()
-        minimizeMenu()
-    end)
-    
-    minimizedTab.MouseButton1Click:Connect(function()
-        restoreMenu()
+        main.Visible = false
+        title.Visible = false
+        restoreBtn.Visible = true
     end)
     
     closeBtn.MouseButton1Click:Connect(function()
-        menuVisible = not menuVisible
-        mainContainer.Visible = menuVisible
-        titleLabel.Visible = menuVisible
-        minimizedTab.Visible = not menuVisible and false
-        
-        if not menuVisible then
-            closeBtn.Text = "◀"
-        else
-            closeBtn.Text = "✕"
+        main.Visible = false
+        title.Visible = false
+        restoreBtn.Visible = false
+        -- Show small dot to restore
+        if not screenGui:FindFirstChild("DotRestore") then
+            local dot = Instance.new("TextButton")
+            dot.Name = "DotRestore"
+            dot.Parent = screenGui
+            dot.Size = UDim2.fromOffset(20, 20)
+            dot.Position = UDim2.new(1, -30, 0.5, -10)
+            dot.Text = ""
+            dot.BackgroundColor3 = Color3.fromRGB(180, 0, 255)
+            dot.ZIndex = 200
+            Instance.new("UICorner", dot).CornerRadius = UDim.new(1, 0)
+            
+            dot.MouseButton1Click:Connect(function()
+                main.Visible = true
+                title.Visible = true
+                dot:Destroy()
+            end)
         end
     end)
     
-    -- KEYBOARD SHORTCUT: RightShift to toggle menu
-    UIS.InputBegan:Connect(function(input, gameProcessed)
-        if gameProcessed then return end
-        
-        if input.KeyCode == Enum.KeyCode.RightShift then
-            if mainContainer.Visible then
-                minimizeMenu()
-            else
-                restoreMenu()
-            end
-        end
+    restoreBtn.MouseButton1Click:Connect(function()
+        main.Visible = true
+        title.Visible = true
+        restoreBtn.Visible = false
     end)
     
-    -- UI CREATION FUNCTIONS
-    local function addButton(y, text, callback)
-        local btn = Instance.new("TextButton", scrollFrame)
-        btn.Size = UDim2.new(1, -20, 0, 30)
-        btn.Position = UDim2.new(0, 10, 0, y)
+    -- HELPER FUNCTIONS FOR CREATING UI ELEMENTS
+    local function addButton(text, callback)
+        local btn = Instance.new("TextButton")
+        btn.Parent = scroll
+        btn.Size = UDim2.new(1, -16, 0, 32)
         btn.Text = text
-        btn.Font = Enum.Font.Gotham
+        btn.Font = Enum.Font.GothamSemibold
         btn.TextSize = 14
         btn.TextColor3 = Color3.new(1, 1, 1)
         btn.BackgroundColor3 = Color3.fromRGB(150, 0, 220)
-        btn.AutoButtonColor = true
         btn.ZIndex = 5
         Instance.new("UICorner", btn)
         btn.MouseButton1Click:Connect(function()
@@ -254,10 +284,10 @@ local function createGUI()
         return btn
     end
     
-    local function addLabel(y, text)
-        local lbl = Instance.new("TextLabel", scrollFrame)
-        lbl.Size = UDim2.new(1, -20, 0, 18)
-        lbl.Position = UDim2.new(0, 10, 0, y)
+    local function addLabel(text)
+        local lbl = Instance.new("TextLabel")
+        lbl.Parent = scroll
+        lbl.Size = UDim2.new(1, -16, 0, 18)
         lbl.BackgroundTransparency = 1
         lbl.Text = text
         lbl.Font = Enum.Font.Gotham
@@ -268,19 +298,40 @@ local function createGUI()
         return lbl
     end
     
-    local function addSlider(y, min, max, value, callback)
-        local bar = Instance.new("Frame", scrollFrame)
-        bar.Size = UDim2.new(1, -20, 0, 12)
-        bar.Position = UDim2.new(0, 10, 0, y)
+    local function addSlider(min, max, value, callback)
+        local container = Instance.new("Frame")
+        container.Parent = scroll
+        container.Size = UDim2.new(1, -16, 0, 24)
+        container.BackgroundTransparency = 1
+        container.ZIndex = 5
+        
+        local bar = Instance.new("Frame")
+        bar.Parent = container
+        bar.Size = UDim2.new(1, 0, 0, 12)
+        bar.Position = UDim2.new(0, 0, 0.5, -6)
         bar.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
         bar.ZIndex = 5
         Instance.new("UICorner", bar)
         
-        local fill = Instance.new("Frame", bar)
+        local fill = Instance.new("Frame")
+        fill.Parent = bar
         fill.BackgroundColor3 = Color3.fromRGB(180, 0, 255)
         fill.Size = UDim2.new((value - min) / (max - min), 0, 1, 0)
-        fill.ZIndex = 5
+        fill.ZIndex = 6
         Instance.new("UICorner", fill)
+        
+        -- Value label
+        local valLabel = Instance.new("TextLabel")
+        valLabel.Parent = container
+        valLabel.Size = UDim2.new(0, 40, 0, 12)
+        valLabel.Position = UDim2.new(1, -40, 0.5, 6)
+        valLabel.BackgroundTransparency = 1
+        valLabel.Text = tostring(value)
+        valLabel.Font = Enum.Font.Gotham
+        valLabel.TextSize = 10
+        valLabel.TextColor3 = Color3.fromRGB(180, 0, 255)
+        valLabel.TextXAlignment = Enum.TextXAlignment.Right
+        valLabel.ZIndex = 6
         
         local dragging = false
         
@@ -303,104 +354,112 @@ local function createGUI()
                     (mousePos.X - bar.AbsolutePosition.X) / bar.AbsoluteSize.X,
                     0, 1
                 )
+                local newVal = math.floor(min + pct * (max - min))
                 fill.Size = UDim2.new(pct, 0, 1, 0)
-                callback(math.floor(min + pct * (max - min)))
+                valLabel.Text = tostring(newVal)
+                callback(newVal)
             end
         end)
         
         return fill
     end
     
-    -- Create all buttons
-    local y = 10
+    local function addSeparator()
+        local sep = Instance.new("Frame")
+        sep.Parent = scroll
+        sep.Size = UDim2.new(1, -16, 0, 1)
+        sep.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+        sep.BorderSizePixel = 0
+        sep.ZIndex = 5
+        return sep
+    end
     
-    guiButtons.Aimbot = addButton(y, "Aimbot: ON", function(b)
+    -- CREATE ALL BUTTONS
+    addSeparator()
+    
+    guiButtons.Aimbot = addButton("Aimbot: ON", function(b)
         Settings.Aimbot.Enabled = not Settings.Aimbot.Enabled
         b.Text = "Aimbot: " .. (Settings.Aimbot.Enabled and "ON" or "OFF")
     end)
-    y += 36
     
-    guiButtons.ESP = addButton(y, "ESP: ON", function(b)
+    guiButtons.ESP = addButton("ESP: ON", function(b)
         Settings.ESP.Enabled = not Settings.ESP.Enabled
         b.Text = "ESP: " .. (Settings.ESP.Enabled and "ON" or "OFF")
     end)
-    y += 36
     
-    guiButtons.Tracers = addButton(y, "Tracers: ON", function(b)
+    guiButtons.Tracers = addButton("Tracers: ON", function(b)
         Settings.ESP.Tracers = not Settings.ESP.Tracers
         b.Text = "Tracers: " .. (Settings.ESP.Tracers and "ON" or "OFF")
     end)
-    y += 36
     
-    guiButtons.Boxes = addButton(y, "ESP Boxes: ON", function(b)
+    guiButtons.Boxes = addButton("ESP Boxes: ON", function(b)
         Settings.ESP.Boxes = not Settings.ESP.Boxes
         b.Text = "ESP Boxes: " .. (Settings.ESP.Boxes and "ON" or "OFF")
     end)
-    y += 36
     
-    guiButtons.TeamCheck = addButton(y, "Team Check: ON", function(b)
+    guiButtons.TeamCheck = addButton("Team Check: ON", function(b)
         Settings.ESP.TeamCheck = not Settings.ESP.TeamCheck
         b.Text = "Team Check: " .. (Settings.ESP.TeamCheck and "ON" or "OFF")
     end)
-    y += 36
     
-    guiButtons.VisibilityCheck = addButton(y, "Vis Check: ON", function(b)
+    guiButtons.VisibilityCheck = addButton("Vis Check: ON", function(b)
         Settings.Aimbot.VisibilityCheck = not Settings.Aimbot.VisibilityCheck
         b.Text = "Vis Check: " .. (Settings.Aimbot.VisibilityCheck and "ON" or "OFF")
     end)
-    y += 36
     
-    guiButtons.Fly = addButton(y, "Fly: OFF (X)", function(b)
+    addSeparator()
+    
+    guiButtons.Fly = addButton("Fly: OFF (X)", function(b)
         Settings.Fly.Enabled = not Settings.Fly.Enabled
         b.Text = "Fly: " .. (Settings.Fly.Enabled and "ON" or "OFF") .. " (X)"
     end)
-    y += 36
     
-    guiButtons.FOV = addButton(y, "FOV Circle: ON", function(b)
+    guiButtons.FOV = addButton("FOV Circle: ON", function(b)
         Settings.Visuals.FOVCircle = not Settings.Visuals.FOVCircle
         b.Text = "FOV Circle: " .. (Settings.Visuals.FOVCircle and "ON" or "OFF")
     end)
-    y += 36
     
-    guiButtons.InfJump = addButton(y, "Infinite Jump: OFF", function(b)
+    guiButtons.InfJump = addButton("Infinite Jump: OFF", function(b)
         Settings.Movement.InfiniteJump = not Settings.Movement.InfiniteJump
         b.Text = "Infinite Jump: " .. (Settings.Movement.InfiniteJump and "ON" or "OFF")
     end)
-    y += 36
     
-    -- Sliders
-    y += 10
-    addLabel(y, "FOV Size")
-    y += 20
-    addSlider(y, 50, 400, Settings.Aimbot.FOV, function(v)
+    addSeparator()
+    
+    -- SLIDERS
+    addLabel("FOV Size")
+    addSlider(50, 400, Settings.Aimbot.FOV, function(v)
         Settings.Aimbot.FOV = v
     end)
-    y += 30
     
-    addLabel(y, "Walk Speed")
-    y += 20
-    addSlider(y, 16, 200, Settings.Movement.WalkSpeed, function(v)
+    addLabel("Walk Speed")
+    addSlider(16, 200, Settings.Movement.WalkSpeed, function(v)
         Settings.Movement.WalkSpeed = v
     end)
-    y += 30
     
-    addLabel(y, "Fly Speed")
-    y += 20
-    addSlider(y, 20, 200, Settings.Fly.Speed, function(v)
+    addLabel("Fly Speed")
+    addSlider(20, 200, Settings.Fly.Speed, function(v)
         Settings.Fly.Speed = v
     end)
-    y += 30
     
-    addLabel(y, "Aimbot Smoothness")
-    y += 20
-    addSlider(y, 1, 20, Settings.Aimbot.Smoothness, function(v)
+    addLabel("Aimbot Smoothness")
+    addSlider(1, 20, Settings.Aimbot.Smoothness, function(v)
         Settings.Aimbot.Smoothness = v
     end)
     
-    print("[Unknown Hub] GUI loaded successfully!")
-    print("[Unknown Hub] Press RightShift to toggle menu")
-    print("[Unknown Hub] Click '—' to minimize, '✕' to hide, minimized tab to restore")
+    -- BOTTOM PADDING
+    local bottomPadding = Instance.new("Frame")
+    bottomPadding.Name = "BottomPadding"
+    bottomPadding.Parent = scroll
+    bottomPadding.Size = UDim2.new(1, 0, 0, 10)
+    bottomPadding.BackgroundTransparency = 1
+    bottomPadding.LayoutOrder = 999
+    
+    print("✅ Unknown Hub GUI loaded!")
+    print("   - Click '—' to minimize")
+    print("   - Click '✕' to close")
+    print("   - Press RightShift to toggle")
 end
 
--- Rest of script (ESP, Aimbot, Fly, etc.) remains the same as previous version...
--- [Keep all the ESP, Aimbot, Fly, and Main Loop code from the previous script]
+-- [REST OF THE SCRIPT - ESP, Aimbot, Fly, Main Loop - SAME AS BEFORE]
+-- [... Include all the ESP, Aimbot, Fly, and RenderStepped code from the previous complete script ...]
